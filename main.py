@@ -12,10 +12,10 @@ import torch
 n_neighbors=5
 MIN_ANGLE=0
 MAX_ANGLE = 360
-SAMPLES = 1024
-SIGNAL_SIZE = 512
+SAMPLES = 512
+SIGNAL_SIZE = 256
 directed = False
-SNR=0
+SNR=10
 #####################
 walk_len=4
 val_ratio=0.05
@@ -121,7 +121,7 @@ for epoch in range(10):
 
 print('##reconnect##')
 A=None
-for i in range(-1,4):
+for i in range(-1):
     test_loader,edge_index=prepare_test_dataset(sinogram_noise,A,n_neighbors,walk_len,batch_size,SAMPLES,i,directed)
     scores,AUC=test(test_loader)
     A=update_A(edge_index,scores,SAMPLES,n_neighbors,directed)

@@ -28,18 +28,33 @@ def add_noise(SNR,sinogram):
     noise = np.random.randn(sinogram.shape[0],sinogram.shape[1])*np.sqrt(VARIANCE)
     return sinogram + noise
 
-def compute_Laplacian(sinogram,n_neighbors = 10,precomputed=False):
-    if not precomputed:
-        data=sinogram.T
-        A_nl= kneighbors_graph(data, n_neighbors=n_neighbors).toarray()
-    else:
-        A_nl=sinogram
-    A_knn=0.5*(A_nl+A_nl.T)
-    L = np.diag(A_knn.sum(axis=1)) - A_knn
-    L=sparse.csr_matrix(L)
-    eigenValues, eigenVectors=eigsh(L,k=3,which='SM')
-    idx = np.argsort(eigenValues)
-    return eigenVectors[:, idx[1]],eigenVectors[:, idx[2]]
+def compute_Laplacian(sinogram,n_neighbors = 10,precomputed=False,dim=2):
+    if dim==2:
+        if not precomputed:
+            data=sinogram.T
+            A_nl= kneighbors_graph(data, n_neighbors=n_neighbors).toarray()
+        else:
+            A_nl=sinogram
+        A_knn=0.5*(A_nl+A_nl.T)
+        L = np.diag(A_knn.sum(axis=1)) - A_knn
+        L=sparse.csr_matrix(L)
+        eigenValues, eigenVectors=eigsh(L,k=3,which='SM')
+        idx = np.argsort(eigenValues)
+        return eigenVectors[:, idx[1]],eigenVectors[:, idx[2]]
+    if dim==3:
+        if not precomputed:
+            data=sinogram.T
+            A_nl= kneighbors_graph(data, n_neighbors=n_neighbors).toarray()
+        else:
+            A_nl=sinogram
+        A_knn=0.5*(A_nl+A_nl.T)
+        L = np.diag(A_knn.sum(axis=1)) - A_knn
+        L=sparse.csr_matrix(L)
+        eigenValues, eigenVectors=eigsh(L,k=4,which='SM')
+        idx = np.argsort(eigenValues)
+        return eigenVectors[:, idx[1]],eigenVectors[:, idx[2]],eigenVectors[:, idx[3]]
+
+
 def plot_L(e1,e2,theta_list):
     label=theta_list/360
     fig = plt.figure(figsize=(6, 6))
@@ -174,8 +189,11 @@ def prepare_train_dataset(sinogram,n_neighbors,walk_len,batch_size,val_ratio,dir
     return train_loader,val_loader
 
 
-def prepare_test_dataset(sinogram_noise,A,n_neighbors,walk_len,batch_size,Awidth,iter_index,directed):
+def prepare_test_dataset(sinogram_noise,A,n_neighbors,walk_len,batch_size,Awidth,iter_index,directed,precomputed=False):
     edge_index=np.arange(Awidth*Awidth)
+    # if precomputed:
+    #     kneighbors_graph=neighbotFromX
+    #     sinogram_noise=sinogram_noise.T
     if iter_index==-1:
         A=kneighbors_graph(sinogram_noise.T, n_neighbors=n_neighbors).toarray()
         A=A.astype(np.int)
@@ -278,6 +296,7 @@ def prepare_test_dataset(sinogram_noise,A,n_neighbors,walk_len,batch_size,Awidth
 
 def prepare_test_dataset_X(sinogram_noise,A,n_neighbors,walk_len,batch_size,Awidth,iter_index,directed):
     edge_index=np.arange(Awidth*Awidth)
+    sinogram_noise=sinogram_noise.T
     if iter_index==-1:
         A=neighbotFromX(sinogram_noise.T, n_neighbors=n_neighbors)
         A=A.astype(np.int)
