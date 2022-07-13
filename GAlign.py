@@ -88,8 +88,8 @@ class GAlign:
 
 
 if __name__ == "__main__":
-    X1=np.random.randn(100,3)
-    X2=np.concatenate([X1[50:],X1[:50]])
+    X1=np.random.randn(100,10)
+    X2=np.concatenate([X1[20:],X1[:20]])
     nbrs = NearestNeighbors(n_neighbors=3).fit(X1)
     G1=nbrs.kneighbors_graph(X1).toarray()
     nbrs = NearestNeighbors(n_neighbors=3).fit(X2)
