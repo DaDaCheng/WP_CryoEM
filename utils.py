@@ -117,8 +117,8 @@ def k_hop_subgraph(src, dst, A, A_csc, num_hops=2,directed=True):
 def prepare_train_dataset(sinogram,n_neighbors,walk_len,batch_size,val_ratio,directed):
     A=kneighbors_graph(sinogram.T, n_neighbors=n_neighbors).toarray()
     A=A.astype(np.int)
-    Awidth=A.shape[0]
-    edge_index=np.arange(Awidth*Awidth)
+    N=A.shape[0]
+    edge_index=np.arange(N*N)
     if directed:
         pos_edge_index=edge_index[A.reshape(-1)==1]
         matrix_index_mask=np.ones(A.shape,dtype=bool)
@@ -148,8 +148,8 @@ def prepare_train_dataset(sinogram,n_neighbors,walk_len,batch_size,val_ratio,dir
 
     index=0
     for i in tqdm(edge_index):
-        xi=i//Awidth
-        yi=i%Awidth
+        xi=i//N
+        yi=i%N
         A_t=k_hop_subgraph(xi,yi,A,A_csc,directed=directed)
         A_tp=A_t.copy()
         A_tm=A_t.copy()
@@ -189,8 +189,8 @@ def prepare_train_dataset(sinogram,n_neighbors,walk_len,batch_size,val_ratio,dir
     return train_loader,val_loader
 
 
-def prepare_test_dataset(sinogram_noise,A,n_neighbors,walk_len,batch_size,Awidth,iter_index,directed,precomputed=False):
-    edge_index=np.arange(Awidth*Awidth)
+def prepare_test_dataset(sinogram_noise,A,n_neighbors,walk_len,batch_size,N,iter_index,directed,precomputed=False):
+    edge_index=np.arange(N*N)
     # if precomputed:
     #     kneighbors_graph=neighbotFromX
     #     sinogram_noise=sinogram_noise.T
@@ -260,8 +260,8 @@ def prepare_test_dataset(sinogram_noise,A,n_neighbors,walk_len,batch_size,Awidth
     
     index=0
     for i in tqdm(edge_index):
-        xi=i//Awidth
-        yi=i%Awidth
+        xi=i//N
+        yi=i%N
         A_t=k_hop_subgraph(xi,yi,A,A_csc,directed=directed)
         A_tp=A_t.copy()
         A_tm=A_t.copy()
@@ -294,8 +294,8 @@ def prepare_test_dataset(sinogram_noise,A,n_neighbors,walk_len,batch_size,Awidth
 
 
 
-def prepare_test_dataset_X(sinogram_noise,A,n_neighbors,walk_len,batch_size,Awidth,iter_index,directed):
-    edge_index=np.arange(Awidth*Awidth)
+def prepare_test_dataset_X(sinogram_noise,A,n_neighbors,walk_len,batch_size,N,iter_index,directed):
+    edge_index=np.arange(N*N)
     sinogram_noise=sinogram_noise.T
     if iter_index==-1:
         A=neighbotFromX(sinogram_noise.T, n_neighbors=n_neighbors)
@@ -318,11 +318,6 @@ def prepare_test_dataset_X(sinogram_noise,A,n_neighbors,walk_len,batch_size,Awid
             neg_edge_index=edge_index[np.triu(A_noise_d,k=1).reshape(-1)==1]
             A=sparse.csr_matrix(A)
             A_csc=None
-
-
-
-
-
     else:
         if iter_index==0:
             A_noise_d=neighbotFromX(sinogram_noise.T, n_neighbors=n_neighbors)
@@ -363,8 +358,8 @@ def prepare_test_dataset_X(sinogram_noise,A,n_neighbors,walk_len,batch_size,Awid
     
     index=0
     for i in tqdm(edge_index):
-        xi=i//Awidth
-        yi=i%Awidth
+        xi=i//N
+        yi=i%N
         A_t=k_hop_subgraph(xi,yi,A,A_csc,directed=directed)
         A_tp=A_t.copy()
         A_tm=A_t.copy()
@@ -387,31 +382,31 @@ def prepare_test_dataset_X(sinogram_noise,A,n_neighbors,walk_len,batch_size,Awid
     test_data=torch.tensor(test_data_list,dtype=torch.int)
     test_label=torch.tensor(test_label_list,dtype=torch.int)
     test_loader = DataLoader(dataset=MyDataset(test_data,test_label), 
-                                            batch_size=batch_size, 
+                                            batch_size=10000, 
                                             shuffle=False)
 
     return test_loader,edge_index
 
 
 
-def update_A(edge_index,scores,Awidth,n_neighbors,directed):
+def update_A(edge_index,scores,N,n_neighbors,directed):
     if not directed:
-        edge_index_p=edge_index//Awidth
-        edge_index_q=edge_index%Awidth
-        edge_index_l=edge_index_p+edge_index_q*Awidth
+        edge_index_p=edge_index//N
+        edge_index_q=edge_index%N
+        edge_index_l=edge_index_p+edge_index_q*N
         edge_index=np.concatenate((edge_index,edge_index_l),axis=0)
         scores=np.concatenate((scores,scores),axis=0)
     perm=np.argsort(edge_index)
     edge_index=edge_index[perm]
     scores=scores[perm]
 
-    A_new=np.zeros((Awidth,Awidth),dtype=np.int64)
+    A_new=np.zeros((N,N),dtype=np.int64)
     index=0
-    for i in range(Awidth):
+    for i in range(N):
         edge_node=[]
         score_node=[]
-        while edge_index[index]<Awidth*(i+1):
-            edge_node.append(edge_index[index]%Awidth)
+        while edge_index[index]<N*(i+1):
+            edge_node.append(edge_index[index]%N)
             score_node.append(scores[index])
             index=index+1
             if index==len(edge_index):
@@ -428,5 +423,55 @@ def update_A(edge_index,scores,Awidth,n_neighbors,directed):
         A_new[A_new>0]=1
     return A_new
 
+
+
+
+
+def updata_A_sycn(sinogram_noise,A,node_index,check_number,n_neighbors,walk_len,N,directed,test):
+    distance_i=sinogram_noise[node_index]
+    check_list=np.argsort(distance_i)[:check_number]
+    test_data_list=np.empty((len(check_list),2*walk_len),dtype=np.int64)
+    test_label_list=np.empty(len(check_list))
+    index=0
+    for i in check_list:
+        xi=node_index
+        yi=i
+        A_t=k_hop_subgraph(xi,yi,A,None,directed=directed)
+        #A_t=A_t.tolil()
+        A_tp=A_t.copy()
+        A_tm=A_t.copy()
+        A_tp[0,1]=1
+        A_tm[0,1]=0
+        wp=np.empty((walk_len,2))
+        A_tp_t=A_tp.copy()
+        A_tm_t=A_tm.copy()
+        A_tp_t=A_tp@A_tp_t
+        A_tm_t=A_tm@A_tm_t
+        for j in range(walk_len):
+            A_tp_t=A_tp@A_tp_t
+            A_tm_t=A_tm@A_tm_t
+            wp[j,0]=(A_tp_t[0,1])
+            wp[j,1]=(A_tm_t[0,1])
+        test_data_list[index]=wp.reshape(-1)
+        test_label_list[index]=A_t[0,1]
+        index=index+1
+    test_data=torch.tensor(test_data_list,dtype=torch.int)
+    test_label=torch.tensor(test_label_list,dtype=torch.int)
+    test_loader = DataLoader(dataset=MyDataset(test_data,test_label), 
+                                            batch_size=N, 
+                                            shuffle=False)
+    scores,AUC=test(test_loader)
+    argsort_score=np.argsort(-scores)
+    argsort_index=check_list[argsort_score]
+    #A=A.tolil()
+    for i in argsort_index[:n_neighbors]:
+        if i !=node_index:
+            A[node_index,i]=1
+            A[i,node_index]=1
+    for i in argsort_index[n_neighbors:]:
+        A[node_index,i]=0
+        A[i,node_index]=0
+    #A=A.tocsr()
+    return A
 
 
